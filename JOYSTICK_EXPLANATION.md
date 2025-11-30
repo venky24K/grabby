@@ -1,236 +1,89 @@
-# Base Controller Joystick - Technical Explanation
+# Joystick & Control System - Technical Explanation
 
 ## Overview
 
-The base controller joystick is a virtual joystick component that converts user input (mouse/touch) into mecanum wheel speeds for omnidirectional movement. It uses trigonometric calculations to determine the speed of each of the 4 wheels based on the joystick's angle and distance from center.
+The **Grabby** controller uses two virtual joysticks to independently control the robot's base and arm. Unlike traditional WebSocket-based systems, this application uses **Web Bluetooth (BLE)** to communicate directly with two separate ESP32 microcontrollers.
 
-## Component Architecture
+## System Architecture
 
-### 1. Joystick Component (`Joystick` function)
-Located in `src/App.jsx` (lines 485-708)
+### Dual BLE Connection
+The app manages two concurrent Bluetooth Low Energy connections:
+1.  **Base Controller (`MecanumRobot`)**: Handles the 4-wheel mecanum chassis.
+2.  **Arm Controller (`MecanumArm`)**: Handles the 4-DOF robotic arm and gripper.
 
-**Visual Design:**
-- 200px × 200px circular joystick
-- Blue border (#007bff) with light gray background
-- 45px circular handle that moves with user input
-- Visual indicators:
-  - 8 directional markers (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°)
-  - 3 concentric circles showing speed zones (33%, 66%, 100%)
-  - Real-time display showing speed % and angle when dragging
+### 1. Base Joystick (Left)
+**Function**: Omnidirectional Movement (Holonomic)
+**Input**: 2D Vector (X, Y)
 
-**Input Methods:**
-- Mouse: Click and drag
-- Touch: Touch and drag (mobile support)
+**Kinematics (Mecanum Wheels):**
+The joystick input is converted into four motor speeds using standard mecanum kinematics:
+-   **Front Left**:  `Vy + Vx`
+-   **Front Right**: `Vy - Vx`
+-   **Rear Left**:   `Vy - Vx`
+-   **Rear Right**:  `Vy + Vx`
 
-**State Management:**
-- `isDragging`: Whether user is actively controlling joystick
-- `position`: Current {x, y} position relative to center
-- `currentSpeed`: Display speed (0-100%)
+*Note: Rotation is handled separately via discrete "Rotate Left/Right" buttons to avoid accidental rotation during translation.*
 
-### 2. Input Processing Flow
+**BLE Protocol (Base):**
+-   **Service UUID**: `0000FFE0-0000-1000-8000-00805F9B34FB`
+-   **Characteristic UUID**: `0000FFE1-0000-1000-8000-00805F9B34FB`
+-   **Command Format**: `M:vx:vy`
+    -   `vx`: X-axis velocity (-1.0 to 1.0)
+    -   `vy`: Y-axis velocity (-1.0 to 1.0)
+    -   Example: `M:0.5:-0.8` (Move forward-right)
 
-```
-User Input (Mouse/Touch)
-    ↓
-Calculate position relative to joystick center
-    ↓
-Calculate distance from center (clamped to max radius)
-    ↓
-Calculate angle using atan2(y, x) → 0-360°
-    ↓
-Normalize distance to 0-1 range
-    ↓
-Call onMove(angle, normalizedDistance)
-```
+### 2. Arm Joystick (Right)
+**Function**: Joint Control (Shoulder & Elbow)
+**Input**: 2D Vector (X, Y) mapped to Velocity
 
-**Key Calculations:**
-```javascript
-// Position relative to center
-x = clientX - centerX
-y = clientY - centerY
+**Control Logic:**
+Unlike the base, the arm joystick controls the **velocity** of the joints, not their absolute position. This allows for smooth, precise adjustments.
 
-// Distance from center
-distance = √(x² + y²)
-maxDistance = (joystickWidth / 2) - 20  // 80px for 200px joystick
+-   **X-Axis (Horizontal)**: Controls **Shoulder** joint.
+    -   Right: Increase angle (Raise shoulder)
+    -   Left: Decrease angle (Lower shoulder)
+-   **Y-Axis (Vertical)**: Controls **Elbow** joint.
+    -   Up: Increase angle (Extend elbow)
+    -   Down: Decrease angle (Retract elbow)
 
-// Clamp to max radius
-if (distance > maxDistance) {
-  x = (x / distance) * maxDistance
-  y = (y / distance) * maxDistance
-}
+**BLE Protocol (Arm):**
+-   **Service UUID**: `0000FFE0-0000-1000-8000-00805F9B34FB`
+-   **Characteristic UUID**: `0000FFE1-0000-1000-8000-00805F9B34FB`
+-   **Command Format**: `A:base:shoulder:elbow:wrist:gripper`
+    -   Sends absolute angles (0-180) for all servos.
+    -   Example: `A:90:45:120:90:0`
 
-// Calculate angle (0-360°)
-angle = atan2(y, x) * (180 / π)
+## Component Implementation
 
-// Normalize distance (0-1)
-normalizedDistance = min(1, distance / maxDistance)
-```
+### `Joystick` Component (`src/App.jsx`)
+A reusable React component that handles touch and mouse logic.
 
-### 3. Mecanum Wheel Kinematics (`handleJoystickMove`)
+**Visuals:**
+-   **Base Joystick**: Cyan theme.
+-   **Arm Joystick**: Purple theme.
+-   **Feedback**: The inner knob follows the user's finger but is constrained within the outer ring radius.
 
-The core mecanum wheel calculation converts joystick angle and distance into 4 wheel speeds.
+**Touch Handling:**
+-   Uses `touch-action: none` to prevent browser scrolling.
+-   Supports multi-touch: Users can move the base and arm simultaneously.
+-   **Auto-Center**: When released, the joystick snaps back to (0,0), sending a stop command.
 
-**Mecanum Wheel Layout:**
-```
-    Front
-FL ──────── FR
-│           │
-│    Robot  │
-│           │
-RL ──────── RR
-    Rear
-```
+## Safety Features
 
-**Mathematical Formula:**
-For mecanum wheels, each wheel speed is calculated using:
-- Front Left:  `sin(angle + 45°) × speed`
-- Front Right: `cos(angle + 45°) × speed`
-- Rear Left:   `cos(angle + 45°) × speed`
-- Rear Right:  `sin(angle + 45°) × speed`
+1.  **Connection Monitoring**:
+    -   The app tracks connection state (`isConnected`).
+    -   Joysticks are disabled (grayed out) if not connected.
 
-**Code Implementation:**
-```javascript
-const handleJoystickMove = (angle, distance) => {
-  // distance is 0-1 normalized
-  const speedFactor = distance * 100; // Convert to 0-100 range
-  
-  const radians = (angle * Math.PI) / 180;
-  
-  // Calculate raw wheel speeds
-  const frontLeft = Math.sin(radians + Math.PI/4) * speedFactor;
-  const frontRight = Math.cos(radians + Math.PI/4) * speedFactor;
-  const rearLeft = Math.cos(radians + Math.PI/4) * speedFactor;
-  const rearRight = Math.sin(radians + Math.PI/4) * speedFactor;
+2.  **Heartbeat / Keep-Alive**:
+    -   The Base controller logic sends commands at **20Hz** (every 50ms).
+    -   If the joystick is released, it sends a "Stop" command (`M:0:0`) repeatedly for a short burst to ensure the robot halts, then stops transmitting to save bandwidth.
 
-  // Normalize to prevent exceeding -100 to 100 range
-  const maxVal = Math.max(
-    Math.abs(frontLeft),
-    Math.abs(frontRight),
-    Math.abs(rearLeft),
-    Math.abs(rearRight),
-    1.0
-  );
+3.  **Arm Limits**:
+    -   Software limits are enforced in `App.jsx` to prevent servos from driving beyond physical stops (e.g., Shoulder 0-70°, Elbow 0-180°).
 
-  // Scale to -100 to 100 range
-  const scale = 100 / maxVal;
-  const speeds = {
-    fl: Math.round(frontLeft * scale),
-    fr: Math.round(frontRight * scale),
-    rl: Math.round(rearLeft * scale),
-    rr: Math.round(rearRight * scale)
-  };
+4.  **Force Sensor (FSR) Safety**:
+    -   The firmware monitors the Force Sensitive Resistor (GPIO 34) on the gripper.
+    -   If pressure exceeds the threshold (`FSR_THRESHOLD`), the gripper motor is prevented from closing further to avoid crushing objects.
 
-  // Send to ESP32
-  sendBaseCmd(`MECANUM ${speeds.fl} ${speeds.fr} ${speeds.rl} ${speeds.rr}`);
-};
-```
-
-**Why Normalization?**
-The normalization step ensures that no wheel speed exceeds ±100, which is the maximum range the ESP32 expects. Without normalization, certain angles could produce speeds > 100.
-
-**Example Calculations:**
-
-| Joystick Direction | Angle | FL | FR | RL | RR | Movement |
-|-------------------|-------|----|----|----|----|----------|
-| Forward (Up) | 90° | 71 | 71 | -71 | -71 | Forward |
-| Backward (Down) | 270° | -71 | -71 | 71 | 71 | Backward |
-| Right | 0° | 71 | -71 | 71 | -71 | Strafe Right |
-| Left | 180° | -71 | 71 | -71 | 71 | Strafe Left |
-| Forward-Right | 45° | 100 | 0 | 0 | -100 | Diagonal Forward-Right |
-| Rotate CW | Special | 100 | -100 | 100 | -100 | Rotate in place |
-
-### 4. Communication with ESP32
-
-**Command Format:**
-```
-MECANUM <fl> <fr> <rl> <rr>
-```
-
-Where each value is -100 to 100:
-- Positive: Forward rotation
-- Negative: Reverse rotation
-- Zero: Stop
-
-**On Release:**
-When joystick is released, sends:
-```
-MECANUM 0 0 0 0
-```
-
-This immediately stops all motors.
-
-### 5. Visual Feedback
-
-**During Dragging:**
-- Handle changes color (darker blue when active)
-- Shows overlay with current speed % and angle
-- Handle smoothly follows cursor/finger position
-- Visual markers help user understand direction
-
-**On Release:**
-- Handle smoothly returns to center (0.2s transition)
-- All motors stop
-- Speed display disappears
-
-### 6. Touch Support
-
-The joystick fully supports touch devices:
-- `handleTouchStart`: Initiates drag
-- `handleTouchMove`: Updates position during drag
-- `handleTouchEnd`: Releases and stops motors
-
-Uses `touchAction: 'none'` CSS to prevent browser scrolling interference.
-
-## Movement Patterns
-
-### Forward/Backward
-- **Forward (90°)**: All wheels rotate forward at equal speeds
-- **Backward (270°)**: All wheels rotate backward at equal speeds
-
-### Strafe (Sideways)
-- **Right (0°)**: Front and rear wheels rotate in opposite directions
-- **Left (180°)**: Front and rear wheels rotate in opposite directions (reversed)
-
-### Diagonal Movement
-- **Forward-Right (45°)**: Front-left and rear-right at max speed, others at zero
-- **Forward-Left (135°)**: Front-right and rear-left at max speed, others at zero
-
-### Rotation
-- **Clockwise**: FL and RL forward, FR and RR backward
-- **Counter-clockwise**: FL and RL backward, FR and RR forward
-
-### Combined Movements
-Any angle between cardinal directions produces a combination of translation and rotation, allowing smooth omnidirectional movement.
-
-## Technical Details
-
-**Coordinate System:**
-- Origin: Center of joystick
-- X-axis: Positive right (0°)
-- Y-axis: Positive down (90°)
-- Angle: Measured counter-clockwise from positive X-axis
-
-**Speed Mapping:**
-- Distance from center → Speed (0-100%)
-- Edge of joystick = 100% speed
-- Center = 0% speed (stopped)
-
-**Clamping:**
-- Maximum radius: 80px (for 200px joystick)
-- Prevents handle from leaving joystick boundary
-- Ensures consistent maximum speed
-
-## Error Handling
-
-- **Connection Lost**: Motors automatically stop on WebSocket disconnect
-- **Invalid Commands**: ESP32 validates input and returns error if format is wrong
-- **Timeout**: ESP32 stops motors after 10 seconds of no PING
-
-## Performance Considerations
-
-- Uses `useRef` to avoid re-renders during drag
-- Event listeners attached only when dragging
-- Smooth 60fps updates during mouse/touch movement
-- Minimal calculations per frame (trigonometric functions are fast)
 
 

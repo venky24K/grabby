@@ -2,14 +2,14 @@
 
 ## Base ESP32 - Mecanum Wheel Controller
 
-### Motor Connections (L298N or similar dual H-bridge)
+### Motor Connections (L298N Drivers)
 
-| Motor | IN1 Pin | IN2 Pin | EN Pin | GPIO |
-|-------|---------|---------|--------|------|
-| Front Left (M1)  | M1_IN1  | M1_IN2  | M1_EN  | 16, 17, 4 |
-| Front Right (M2) | M2_IN1  | M2_IN2  | M2_EN  | 27, 26, 25 |
-| Rear Left (M3)   | M3_IN1  | M3_IN2  | M3_EN  | 22, 21, 32 |
-| Rear Right (M4)  | M4_IN1  | M4_IN2  | M4_EN  | 19, 18, 5 |
+| Motor | IN1 (GPIO) | IN2 (GPIO) | EN (PWM) |
+|-------|------------|------------|----------|
+| **Front Left (M1)**  | 16 | 17 | 4 |
+| **Front Right (M2)** | 27 | 26 | 25 |
+| **Rear Left (M3)**   | 22 | 21 | 32 |
+| **Rear Right (M4)**  | 19 | 18 | 5 |
 
 ### Motor Driver Wiring (L298N)
 
@@ -45,26 +45,29 @@ Direction Control:
 
 ## Arm ESP32 - 4 DOF Arm Controller
 
-### Servo Connections
+### Servo & Sensor Connections
 
-| Servo | GPIO Pin | Function |
-|-------|----------|----------|
-| Base     | 2  | Base rotation (0-180°) |
-| Shoulder | 4  | Shoulder joint (0-180°) |
-| Elbow    | 5  | Elbow joint (0-180°) |
-| Wrist    | 18 | Wrist rotation (0-180°) |
-| Gripper  | 19 | End effector (0-180°) |
+| Component | GPIO Pin | Function |
+|-----------|----------|----------|
+| **Base**     | 2  | Base rotation (0-180°) |
+| **Shoulder** | 4  | Shoulder joint (0-180°) |
+| **Elbow**    | 5  | Elbow joint (0-180°) |
+| **Wrist**    | 18 | Wrist rotation (0-180°) |
+| **Gripper**  | 19 | End effector (0-180°) |
+| **FSR**      | 34 | Force Sensitive Resistor (Pressure) |
 
-### Servo Wiring
+### Wiring Diagram
 
 ```
-ESP32          Servo
-------         -----
+ESP32          Servo / Sensor
+------         --------------
 GPIO 2   --->  Base Servo Signal (Yellow/Orange)
 GPIO 4   --->  Shoulder Servo Signal
 GPIO 5   --->  Elbow Servo Signal
 GPIO 18  --->  Wrist Servo Signal
 GPIO 19  --->  Gripper Servo Signal
+
+GPIO 34  --->  FSR Output (Analog)
 
 Power:
 - All servos Red wire → 5V (external power supply recommended)
@@ -94,6 +97,7 @@ const int M1_EN = 4;    // Front Left Enable/PWM
 ```cpp
 const int SERVO_BASE = 2;     // Change these
 const int SERVO_SHOULDER = 4;
+const int PIN_FSR = 34;       // Pressure Sensor
 // ... etc
 ```
 

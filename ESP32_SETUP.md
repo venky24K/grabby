@@ -1,32 +1,21 @@
 # ESP32 Setup Guide
 
-This guide explains how to set up and upload the ESP32 code for both the base and arm controllers.
+This guide explains how to set up and upload the ESP32 code for both the base and arm controllers using **Bluetooth Low Energy (BLE)**.
 
 ## Prerequisites
 
 1. **Arduino IDE** (or PlatformIO)
 2. **ESP32 Board Support** installed in Arduino IDE
 3. **Required Libraries**:
-   - ESPAsyncWebServer (by me-no-dev)
-   - AsyncTCP (by me-no-dev)
-   - ESP32Servo (for arm controller)
+   - **ESP32Servo** (for arm controller)
+   - *Note: BLE libraries are built-in to the ESP32 Arduino Core.*
 
 ## Installing Libraries
 
 ### In Arduino IDE:
 1. Go to **Tools → Manage Libraries**
 2. Search and install:
-   - **ESPAsyncWebServer** by me-no-dev
-   - **AsyncTCP** by me-no-dev
-   - **ESP32Servo** (for arm controller)
-
-### Manual Installation (if needed):
-If libraries are not found in Library Manager, install manually:
-1. Download from GitHub:
-   - ESPAsyncWebServer: https://github.com/me-no-dev/ESPAsyncWebServer
-   - AsyncTCP: https://github.com/me-no-dev/AsyncTCP
-   - ESP32Servo: https://github.com/madhephaestus/ESP32Servo
-2. Extract to `Arduino/libraries/` folder
+   - **ESP32Servo** by Kevin Harrington / John K. Bennett
 
 ## Hardware Configuration
 
@@ -35,14 +24,13 @@ If libraries are not found in Library Manager, install manually:
 **Motor Driver Setup:**
 - Uses PWM + Direction pins for each motor
 - Default pins (adjust in code if needed):
-  - Front Left:  GPIO 26 (PWM), 27 (DIR)
-  - Front Right: GPIO 14 (PWM), 12 (DIR)
-  - Rear Left:   GPIO 25 (PWM), 33 (DIR)
-  - Rear Right:  GPIO 32 (PWM), 35 (DIR)
+  - Front Left:  GPIO 16 (IN1), 17 (IN2), 4 (EN)
+  - Front Right: GPIO 27 (IN1), 26 (IN2), 25 (EN)
+  - Rear Left:   GPIO 22 (IN1), 21 (IN2), 32 (EN)
+  - Rear Right:  GPIO 19 (IN1), 18 (IN2), 5 (EN)
 
 **Motor Driver Options:**
 - L298N, L293D, or similar dual H-bridge drivers
-- BTS7960 or similar high-current drivers
 - Adjust pin assignments in `esp32_base.ino` based on your setup
 
 ### Arm ESP32 (4 DOF Arm)
@@ -54,6 +42,7 @@ If libraries are not found in Library Manager, install manually:
   - Elbow:    GPIO 5
   - Wrist:    GPIO 18
   - Gripper:  GPIO 19
+  - FSR (Pressure Sensor): GPIO 34
 
 **Servo Requirements:**
 - Standard 180° servos (SG90, MG996R, etc.)
@@ -64,71 +53,65 @@ If libraries are not found in Library Manager, install manually:
 
 ### Base Controller:
 1. Open `esp32_base.ino` in Arduino IDE
-2. Select board: **Tools → Board → ESP32 Dev Module** (or your specific ESP32)
+2. Select board: **Tools → Board → ESP32 Dev Module**
 3. Select port: **Tools → Port → [Your ESP32 COM port]**
-4. Adjust motor pins if needed
-5. Click **Upload**
+4. Click **Upload**
+5. Open Serial Monitor (115200 baud) and check for: `BLE Ready! Waiting for connections...`
 
 ### Arm Controller:
 1. Open `esp32_arm.ino` in Arduino IDE
 2. Select board: **Tools → Board → ESP32 Dev Module**
 3. Select port: **Tools → Port → [Your ESP32 COM port]**
-4. Adjust servo pins if needed
-5. Click **Upload**
+4. Click **Upload**
+5. Open Serial Monitor (115200 baud) and check for: `BLE Arm Controller Ready!`
 
-## WiFi Configuration
+## BLE Configuration
 
-### Default Settings:
-- **Base AP**: SSID: `RobotBase`, Password: `robot1234`
-- **Arm AP**: SSID: `RobotArm`, Password: `robot1234`
-- **Port**: 81 (WebSocket)
-- **Auth Token**: `mysecret`
+The system uses two separate BLE services. No manual WiFi configuration is needed.
 
-### Changing WiFi Settings:
-Edit these lines in the code:
-```cpp
-const char* ssid = "YourSSID";
-const char* password = "YourPassword";
-const char* authToken = "YourToken";
-```
+### Device Names:
+- **Base Controller**: `MecanumRobot`
+- **Arm Controller**: `MecanumArm`
+
+### UUIDs (Hardcoded):
+- **Service UUID**: `0000FFE0-0000-1000-8000-00805F9B34FB`
+- **Characteristic UUID**: `0000FFE1-0000-1000-8000-00805F9B34FB`
+
+*Note: These UUIDs match standard HM-10 BLE module defaults for compatibility.*
 
 ## Testing
 
-1. **Upload code** to both ESP32s
-2. **Connect to WiFi AP** from each ESP32:
-   - Base: Connect to `RobotBase` network
-   - Arm: Connect to `RobotArm` network
-3. **Check Serial Monitor** (115200 baud) for IP addresses
-4. **Update React app** with correct IP addresses:
-   - Base IP: Usually `192.168.4.1` (default AP IP)
-   - Arm IP: Usually `192.168.4.1` (if using separate ESP32s, they'll have different IPs)
-5. **Connect** from the React app
+1. **Power on** both ESP32s.
+2. **Open the React App** in a Chrome-based browser (Chrome, Edge, Opera) or Bluefy on iOS.
+   - *Note: Firefox and Safari (on macOS) do not support Web Bluetooth.*
+3. Click the **Gamepad Icon** (Left) to connect to the **Base**.
+   - Select `MecanumRobot` from the pairing list.
+4. Click the **Hand Icon** (Right) to connect to the **Arm**.
+   - Select `MecanumArm` from the pairing list.
+5. Icons will turn colored (Green/Purple) when connected.
 
 ## Troubleshooting
 
+### Connection Issues:
+- **Device not found**: Ensure ESP32 is powered and Serial Monitor shows "BLE Ready".
+- **"Pairing failed"**: Try moving closer to the device or restarting the ESP32.
+- **Browser Support**: Ensure you are using a browser with Web Bluetooth support (Chrome/Edge).
+- **Permissions**: Grant Bluetooth permissions if prompted by the browser/OS.
+
 ### Base Controller:
-- **Motors not moving**: Check motor driver connections and power supply
-- **Wrong direction**: Swap DIR pin logic or swap motor wires
-- **Jittery movement**: Increase PWM frequency or add capacitors
-- **Connection issues**: Check WiFi AP is running (check Serial Monitor)
+- **Motors not moving**: Check motor driver connections and power supply (12V/9V usually required for motors).
+- **Wrong direction**: Swap motor wires or change logic in `esp32_base.ino`.
 
 ### Arm Controller:
-- **Servos not moving**: Check power supply (servos need 5V, may need external supply)
-- **Servo jitter**: Add capacitors to servo power lines, check wiring
-- **Wrong angles**: Adjust servo mounting or modify angle mapping
-- **Connection issues**: Check WiFi AP is running
-
-### General:
-- **Can't connect**: Ensure you're connected to the ESP32's WiFi AP
-- **Authentication fails**: Check token matches in both ESP32 and React app
-- **WebSocket errors**: Check port 81 is not blocked by firewall
+- **Servos not moving**: Check 5V power supply. ESP32 3.3V pin cannot drive multiple servos.
+- **Brownout/Reset**: If ESP32 restarts when servos move, your power supply is insufficient. Use a separate 5V 2A+ supply for servos.
 
 ## Customization
 
 ### Adjusting Motor Speeds:
 In `esp32_base.ino`, modify PWM settings:
 ```cpp
-const int PWM_FREQ = 5000;        // Frequency
+const int PWM_FREQ = 1000;        // Frequency
 const int PWM_RESOLUTION = 8;     // 8-bit = 0-255
 ```
 
@@ -137,15 +120,4 @@ In `esp32_arm.ino`, modify servo attachment:
 ```cpp
 servoBase.attach(SERVO_BASE, 500, 2500); // min/max pulse width in microseconds
 ```
-
-### Changing Pins:
-Simply modify the pin definitions at the top of each file.
-
-## Notes
-
-- Both ESP32s create their own WiFi Access Points (AP mode)
-- For better performance, connect both ESP32s to the same WiFi network (STA mode) and update code accordingly
-- The base controller uses PWM for speed control and digital pins for direction
-- The arm controller uses standard servo library with smooth movement
-- Authentication token must match between ESP32 and React app
 
