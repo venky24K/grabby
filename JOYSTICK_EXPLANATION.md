@@ -85,5 +85,35 @@ A reusable React component that handles touch and mouse logic.
     -   The firmware monitors the Force Sensitive Resistor (GPIO 34) on the gripper.
     -   If pressure exceeds the threshold (`FSR_THRESHOLD`), the gripper motor is prevented from closing further to avoid crushing objects.
 
+## UI Layout Reference
+
+The controller interface is divided into three main sections:
+
+### 1. Left Section (Base Control)
+-   **MOVE Joystick (Cyan)**: Controls the omnidirectional movement of the robot base.
+    -   **Drag**: Move robot (Forward, Backward, Strafe Left/Right).
+    -   **Release**: Stop robot immediately.
+
+### 2. Center Section (Settings & Fine Control)
+-   **Top Bar**:
+    -   **Gamepad Icon**: Connect/Disconnect Base BLE.
+    -   **Home Icon**: Reset Arm to "Home" position.
+    -   **Speed Slider (Zap)**: Adjust global movement speed limit.
+    -   **Hand Icon**: Connect/Disconnect Arm BLE.
+    -   **Fullscreen Icon**: Toggle fullscreen mode.
+-   **Middle Sliders**:
+    -   **Base Rotation**: Velocity control for rotating the base in place.
+    -   **Wrist Angle**: Velocity control for rotating the wrist joint.
+-   **Bottom Buttons**:
+    -   **Rotate Left/Right**: Discrete buttons for precise base rotation.
+    -   **OPEN / CLOSE**: Control the gripper state.
+
+### 3. Right Section (Arm Control)
+-   **ARM Joystick (Purple)**: Controls the main arm joints.
+    -   **Horizontal (X)**: Shoulder Up/Down.
+    -   **Vertical (Y)**: Elbow Extend/Retract.
+    -   **Feedback**: Displays current servo angles (S:xxx E:xxx).
+
+
 
 
