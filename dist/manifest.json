@@ -1,0 +1,16 @@
+{
+    "name": "Mecanum Controller",
+    "short_name": "Mecanum",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#030712",
+    "theme_color": "#030712",
+    "orientation": "landscape",
+    "icons": [
+        {
+            "src": "icon.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
