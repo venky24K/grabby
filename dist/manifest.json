@@ -1,6 +1,6 @@
 {
-    "name": "Mecanum Controller",
-    "short_name": "Mecanum",
+    "name": "Grabby",
+    "short_name": "Grabby",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#030712",
